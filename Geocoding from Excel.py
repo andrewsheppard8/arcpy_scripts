@@ -3,15 +3,20 @@
 Script Name:       Geocoding from Excel
 Author:            Andrew Sheppard
 Role:              GIS Solutions Engineer
-Email:             asheppard@mgt.us
+Email:             andrewsheppard8@gmail.com
 Date Created:      2026-03-23
 
 Description:
 -------------
-The goal of this script is to take a list of addresses in an Excel file, add a new field for the address,
-copy over the address field that exists, clean the field to improve geocoding potential, geocode against
-custom locators (previously built), assess the geocode and if it is found to be sufficient, build a map in
-ArcGIS Pro with custom symbology for new point feature class.
+From an Excel file (.xlsx):
+1. Add a new field for the address, copying over addresses, cleaning to improve geocoding potential
+2. Creating table in ArcGIS Pro
+3. Geocode
+4. Enable Editor Tracking
+5. Get some statistics
+6. Create a map to display the new geocode
+7. Symbolize two feature classes, points and polygons
+
 
 ===============================================================================
 """
@@ -19,7 +24,8 @@ ArcGIS Pro with custom symbology for new point feature class.
 import arcpy
 import pandas as pd
 from arcpy import env
-#Using Pandas to read Excel file, copy address field to new field for geocoding, and clean field
+
+#Step 1
 def CleanExcel(excel_path,add_field):
     try:
         arcpy.AddWarning("Please ensure that the Excel file is closed before running this tool.")
@@ -50,14 +56,15 @@ def CleanExcel(excel_path,add_field):
 
     except Exception as e:
         arcpy.AddError(f"An unexpected error occurred: {str(e)}")
-#Creating table using arcpy for geocoding from Excel file. Preserves all fields from Excel file.
+        
+#Step 2
 def CreateTable(excel_path,students_path,student_fc):
     arcpy.env.workspace=students_path
     table=f"TABLE_{student_fc}"
     arcpy.conversion.ExcelToTable(excel_path,table)
     arcpy.AddMessage(f'Excel turned into ArcGIS Table')
 
-#Geocoding function. Note that the zip_field is optional, when used as a stand alone tool in a Toolbox in ArcGIS Pro. 
+#Step 3 
 def Geocode(students_path,student_fc,locator,zip_field):
     arcpy.env.workspace=students_path
     table=f"TABLE_{student_fc}"
@@ -81,13 +88,14 @@ def Geocode(students_path,student_fc,locator,zip_field):
     )
     arcpy.AddMessage('Geocode complete')
 
-#Enables editor tracking for created feature class
+#Step 4
 def EditorTracking(students_path,student_fc):
     arcpy.env.workspace=students_path
     arcpy.management.EnableEditorTracking(student_fc,"Creator","Created",
                                           "Editor","Edited","ADD_FIELDS","UTC")
     arcpy.AddMessage("Editor tracking enabled for geocode")
 
+#Step 5
 #Looking at statistics, match count for the geocode based on Status field created during geocoding
 def TOTAL(students_path,student_fc):
     arcpy.env.workspace=students_path
@@ -116,6 +124,7 @@ def AddFields(students_path,student_fc):
             arcpy.AddMessage(f"Added new field: {field_name}")
         else:
             arcpy.AddMessage(f'{field_name} already exists. Not added to feature class')
+            
 def SpatialJoin_Y(students_path,student_fc,district):
     arcpy.env.workspace=students_path
     in_district=arcpy.SelectLayerByLocation_management(student_fc, "WITHIN", district, "", "NEW_SELECTION")
@@ -130,6 +139,7 @@ def SpatialJoin_N(students_path,student_fc,district):
     status_M=arcpy.management.SelectLayerByAttribute(out_district,"SUBSET_SELECTION",query_M)
     arcpy.CalculateField_management(status_M,"RESIDENT", "'N'")
     arcpy.SelectLayerByAttribute_management(student_fc, "CLEAR_SELECTION")
+    
 def Resident(students_path,student_fc):
     arcpy.env.workspace=students_path
     query_Y="RESIDENT = 'Y'"
@@ -140,11 +150,12 @@ def Resident(students_path,student_fc):
     nonresident=arcpy.management.SelectLayerByAttribute(student_fc,"NEW_SELECTION",query_N)
     total_nonresident=int(arcpy.GetCount_management(nonresident).getOutput(0))
     arcpy.AddMessage(f'Total number of students where RESIDENT = N: {total_nonresident}')
-    
     query_NULL="RESIDENT IS NULL"
     select_NULL=arcpy.management.SelectLayerByAttribute(student_fc,"NEW_SELECTION",query_NULL)
     total_NULL=int(arcpy.GetCount_management(select_NULL).getOutput(0))
     arcpy.AddMessage(f'Total number of students where RESIDENT is NULL: {total_NULL}')
+
+#Step 6
 def ensure_map_exists(students_path,student_fc,map_name):
     aprx_path='CURRENT'
     aprx=arcpy.mp.ArcGISProject(aprx_path)
@@ -155,6 +166,8 @@ def ensure_map_exists(students_path,student_fc,map_name):
     arcpy.AddMessage(f"{map_name} map created")
     
     return map_obj
+
+#Step 7
 def add_feature_class_layers(map_obj,students_path,student_fc):
     aprx_path='CURRENT'
     aprx=arcpy.mp.ArcGISProject(aprx_path)
@@ -168,6 +181,7 @@ def add_feature_class_layers(map_obj,students_path,student_fc):
                 
     else:
         arcpy.AddMessage(f"{student_fc} does not exist")
+        
 def symbolize_studentsfc(map_obj,students_path,student_fc):
     aprx_path='CURRENT'
     aprx=arcpy.mp.ArcGISProject(aprx_path)
@@ -192,6 +206,7 @@ def symbolize_studentsfc(map_obj,students_path,student_fc):
                 #sym.renderer.addAllValues()
                 lyr.symbology = sym
                 arcpy.AddMessage(f"Symbolized {student_fc} based on RESIDENT field")
+                
 def add_district_layer(map_obj, district):
     if arcpy.Exists(district):
         district_layer = map_obj.addDataFromPath(district)
@@ -206,6 +221,7 @@ def add_district_layer(map_obj, district):
         arcpy.AddMessage('District symbology updated')
     else:
         arcpy.AddMessage("District feature class does not exist")
+        
 def set_active_view(map_name):
     aprx_path = 'CURRENT'
     aprx = arcpy.mp.ArcGISProject(aprx_path)
@@ -213,6 +229,7 @@ def set_active_view(map_name):
     map_view.openView()
     arcpy.AddMessage(f"Set {map_name} as the active view")
     arcpy.AddMessage("Tool complete!")
+    
 if __name__=="__main__":
     excel_path=arcpy.GetParameterAsText(0)
     add_field=arcpy.GetParameterAsText(1)
