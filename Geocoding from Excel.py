@@ -16,6 +16,7 @@ From an Excel file (.xlsx):
 5. Get some statistics
 6. Create a map to display the new geocode
 7. Symbolize two feature classes, points and polygons
+8. Delete unnecessary table in ArcGIS Pro
 
 
 ===============================================================================
@@ -24,9 +25,26 @@ From an Excel file (.xlsx):
 import arcpy
 import pandas as pd
 from arcpy import env
+import tkinter as tk
+from tkinter import messagebox
 
 #Step 1
 def CleanExcel(excel_path,add_field):
+    root=tk.Tk()
+    root.withdraw()
+    root.wm_attributes("-topmost",1)
+    # Make sure the pop-up is centered on the screen
+    root.update_idletasks()  # Update geometry info
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    window_width = 300
+    window_height = 100
+    position_right = int(screen_width / 2 - window_width / 2)
+    position_down = int(screen_height / 2 - window_height / 2)
+    
+    root.geometry(f'{window_width}x{window_height}+{position_right}+{position_down}')
+    messagebox.showwarning('Excel File','Make sure the Excel file is closed before running this tool',parent=root)
+    root.destroy()
     try:
         arcpy.AddWarning("Please ensure that the Excel file is closed before running this tool.")
 
@@ -105,6 +123,40 @@ def TOTAL(students_path,student_fc):
     output_status=arcpy.management.SelectLayerByAttribute(student_fc, "NEW_SELECTION", query)
     status_count = int(arcpy.GetCount_management(output_status).getOutput(0))
     arcpy.AddMessage(f'Number of matched features: {status_count}')
+    percent_value=round(((status_count/total_count)*100),2)
+    percent_x=f'Percent match rate for geocode: {percent_value}%'
+    if percent_value >=94:
+        percent_x += "\n\n                Match Rate OK!"
+    else:
+        arcpy.AddError("script stopped. Match rate too low.")
+        percent_x += "\n\nMatch Rate low, please review student data and try again."
+##        #Punishment initiated
+##        arcpy.Delete_management(student_fc)
+##        arcpy.AddMessage(f"{student_fc} has been deleted due to low match rate.")
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+        root.wm_attributes("-topmost",1)
+        messagebox.showerror('Match Rate', percent_x,parent=root)  # Use showwarning to indicate an issue
+        root.destroy()
+        
+        sys.exit('The match rate is below 94%. Script execution stopped.')  # Stop the script
+    #PERCENT POPUP
+    root=tk.Tk()
+    root.withdraw()
+    root.wm_attributes("-topmost",1)
+    # Make sure the pop-up is centered on the screen
+    root.update_idletasks()  # Update geometry info
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    window_width = 300
+    window_height = 100
+    position_right = int(screen_width / 2 - window_width / 2)
+    position_down = int(screen_height / 2 - window_height / 2)
+    
+    # Set the geometry and make sure it appears in the center
+    root.geometry(f'{window_width}x{window_height}+{position_right}+{position_down}')
+    messagebox.showinfo('Match Rate',percent_x,parent=root)
+    root.destroy()
 
 #Adding additional fields based on organization needs
 def AddFields(students_path,student_fc):
@@ -228,6 +280,18 @@ def set_active_view(map_name):
     map_view = aprx.listMaps(map_name)[0]
     map_view.openView()
     arcpy.AddMessage(f"Set {map_name} as the active view")
+    arcpy.AddMessage("Tool complete!")
+
+#Step 8
+def DeleteTable(students_path,student_fc):
+    tbl=f"TABLE_{student_fc}"
+    split_tbl=f"TABLE_{student_fc}_SPLIT"
+    table=os.path.join(students_path,tbl)
+    split_table=os.path.join(students_path,split_tbl)
+    arcpy.management.Delete(table)
+    arcpy.AddMessage("Deleted table")
+    arcpy.management.Delete(split_table)
+    arcpy.AddMessage("Deleted table w/ split addresses")
     arcpy.AddMessage("Tool complete!")
     
 if __name__=="__main__":
